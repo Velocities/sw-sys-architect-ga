@@ -1,0 +1,19 @@
+{
+    "name": "default",
+    "description": "Default simulator configuration",
+    "seed": 42,
+    "tick_duration_ms": 1,
+    "network_latency_ms": {
+        "min": 1,
+        "max": 10
+    },
+    "failure_injection": {
+        "enabled": false,
+        "probability": 0.0
+    },
+    "metrics": {
+        "collect_latency_percentiles": true,
+        "collect_throughput": true,
+        "collect_cost": true
+    }
+}

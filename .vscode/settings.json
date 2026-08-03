@@ -1,0 +1,13 @@
+{
+    "cmake.useCMakePresets": "always",
+    "cmake.configurePreset": "dev",
+    "cmake.buildPreset": "dev",
+    "cmake.testPreset": "dev",
+    "C_Cpp.default.configurationProvider": "ms-vscode.cmake-tools",
+    "C_Cpp.default.compileCommands": "${workspaceFolder}/build/dev/compile_commands.json",
+    "C_Cpp.clang_format_style": "file",
+    "editor.formatOnSave": true,
+    "[cpp]": {
+        "editor.defaultFormatter": "llvm-vs-code-extensions.vscode-clangd"
+    }
+}

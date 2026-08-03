@@ -208,6 +208,97 @@ This ensures builds are reproducible and eliminates "works on my machine" issues
 
 ---
 
+## Getting Started
+
+### Prerequisites
+
+To use the recommended development workflow, you need:
+
+- [Docker](https://docs.docker.com/get-docker/) installed and running
+- [VS Code](https://code.visualstudio.com/) or [Cursor](https://cursor.com/) with the [Dev Containers extension](https://marketplace.visualstudio.com/items?itemName=ms-vscode-remote.remote-containers)
+
+All compilers, libraries, and tooling are provided inside the dev container — nothing else needs to be installed on your host machine.
+
+### Opening the Dev Container
+
+1. Clone the repository and open it in VS Code or Cursor.
+2. When prompted, click **Reopen in Container**.  
+   If you are not prompted, open the Command Palette (`Ctrl+Shift+P` / `Cmd+Shift+P`) and run **Dev Containers: Reopen in Container**.
+3. Wait for the container image to build on first launch. This can take several minutes while vcpkg downloads and compiles dependencies.
+4. On first open, the container automatically runs configure, build, and tests via `postCreateCommand`.
+
+After setup completes, you should have a working build in `build/dev/` and passing smoke tests.
+
+### Rebuilding the Container
+
+Rebuild the container if you change `.devcontainer/Dockerfile` or need a clean environment:
+
+- Command Palette → **Dev Containers: Rebuild Container**
+
+---
+
+## Common Commands
+
+All commands below assume you are inside the dev container and at the project root.
+
+### Build and Test
+
+| Task | Command |
+|------|---------|
+| Configure (Debug) | `cmake --preset dev` |
+| Build (Debug) | `cmake --build --preset dev` |
+| Run tests | `ctest --preset dev` |
+| Configure + build + test | `cmake --preset dev && cmake --build --preset dev && ctest --preset dev` |
+| Release build | `cmake --preset release && cmake --build --preset release` |
+| Build with clang-tidy | `cmake --preset tidy && cmake --build --preset tidy` |
+
+### Code Quality
+
+| Task | Command |
+|------|---------|
+| Format all source | `clang-format -i $(find include src tests -name '*.cpp' -o -name '*.hpp')` |
+| Generate API docs | `cmake --build --preset dev --target docs` |
+
+Generated documentation is written to `docs/generated/html/`. Open `docs/generated/html/index.html` in a browser to view it.
+
+### CMake Presets
+
+The project uses [CMake Presets](https://cmake.org/cmake/help/latest/manual/cmake-presets.7.html) defined in `CMakePresets.json`:
+
+| Preset | Purpose |
+|--------|---------|
+| `dev` | Debug build with tests enabled (default) |
+| `release` | Optimized release build |
+| `tidy` | Debug build with clang-tidy enabled during compilation |
+
+IDE integration is preconfigured in `.vscode/settings.json` to use the `dev` preset automatically.
+
+### Configuration Files
+
+Example JSON configs live in `configs/`:
+
+- `example_architecture.json` — graph-based architecture definitions
+- `example_workload.json` — request traffic patterns
+- `example_simulator.json` — simulator settings and metrics
+
+These are placeholders for now and will be consumed by the simulator as implementation progresses.
+
+### Project Layout (Build Artifacts)
+
+```
+build/
+    dev/              # Debug build output (default)
+    release/          # Release build output
+    tidy/             # clang-tidy build output
+docs/
+    generated/        # Doxygen output (after running docs target)
+vcpkg_installed/      # vcpkg dependencies (created during configure)
+```
+
+`compile_commands.json` is generated inside `build/dev/` and is used by clangd for IDE IntelliSense.
+
+---
+
 ## Current Status
 
 🚧 Early development

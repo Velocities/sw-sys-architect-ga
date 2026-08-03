@@ -1,0 +1,7 @@
+{
+    "name": "example-traffic",
+    "description": "Example workload definition",
+    "requests_per_second": 100,
+    "duration_seconds": 60,
+    "request_patterns": []
+}

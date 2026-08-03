@@ -19,5 +19,9 @@
 
     "remoteUser": "vscode",
 
-    "postCreateCommand": "cmake --version && ninja --version && vcpkg version"
+    "postCreateCommand": "cmake --preset dev && cmake --build --preset dev && ctest --preset dev",
+
+    "remoteEnv": {
+        "VCPKG_ROOT": "/opt/vcpkg"
+    }
 }

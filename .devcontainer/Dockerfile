@@ -24,7 +24,8 @@ ENV PATH="/usr/lib/ccache:${PATH}"
 
 # Install vcpkg
 RUN git clone https://github.com/microsoft/vcpkg.git /opt/vcpkg && \
-    /opt/vcpkg/bootstrap-vcpkg.sh
+    /opt/vcpkg/bootstrap-vcpkg.sh && \
+    chown -R vscode:vscode /opt/vcpkg
 
 ENV VCPKG_ROOT=/opt/vcpkg
 ENV PATH="${VCPKG_ROOT}:${PATH}"
