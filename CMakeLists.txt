@@ -34,6 +34,7 @@ find_package(nlohmann_json CONFIG REQUIRED)
 add_library(evoarch STATIC
     src/architecture/Architecture.cpp
     src/architecture/ArchitectureGraph.cpp
+    src/architecture/ArchitectureLoader.cpp
     src/architecture/Component.cpp
     src/ga/Fitness.cpp
     src/ga/GeneticAlgorithm.cpp
@@ -73,6 +74,16 @@ add_executable(architecture_demo
 
 target_link_libraries(
     architecture_demo
+    PRIVATE
+        evoarch::evoarch
+)
+
+add_executable(architecture_loader_test
+    apps/architecture_loader_test/main.cpp
+)
+
+target_link_libraries(
+    architecture_loader_test
     PRIVATE
         evoarch::evoarch
 )

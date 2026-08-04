@@ -32,4 +32,6 @@ namespace evoarch
 
         return "Unknown";
     }
+
+    ComponentType parseComponentType(const std::string& typeName);
 }
