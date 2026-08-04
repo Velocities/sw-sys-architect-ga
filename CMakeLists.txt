@@ -47,6 +47,7 @@ add_library(evoarch STATIC
     src/simulation/Event.cpp
     src/simulation/Metrics.cpp
     src/simulation/Request.cpp
+    src/simulation/RequestId.cpp
     src/simulation/Simulator.cpp
     src/simulation/Workflow.cpp
     src/simulation/Workload.cpp
