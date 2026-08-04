@@ -5,21 +5,41 @@
         "dockerfile": "Dockerfile"
     },
 
-    "customizations": {
-        "vscode": {
-            "extensions": [
-                "ms-vscode.cpptools",
-                "llvm-vs-code-extensions.vscode-clangd",
-                "ms-vscode.cmake-tools",
-                "twxs.cmake",
-                "ms-azuretools.vscode-docker"
-            ]
-        }
-    },
+    "workspaceFolder": "/workspaces/${localWorkspaceFolderBasename}",
 
     "remoteUser": "vscode",
 
-    "postCreateCommand": "cmake --preset dev && cmake --build --preset dev && ctest --preset dev",
+    "shutdownAction": "none",
+
+    "capAdd": [
+        "SYS_PTRACE"
+    ],
+
+    "securityOpt": [
+        "seccomp=unconfined"
+    ],
+
+    "appPort": [
+        "127.0.0.1:2222:22"
+    ],
+
+    "mounts": [
+        "source=${localEnv:HOME}/.ssh/authorized_keys,target=/tmp/host-authorized-keys,type=bind,readonly"
+    ],
+
+    "postStartCommand": "bash .devcontainer/start-sshd.sh",
+
+    "customizations": {
+        "vscode": {
+            "extensions": [
+                "llvm-vs-code-extensions.vscode-clangd",
+                "ms-vscode.cmake-tools"
+            ],
+            "settings": {
+                "C_Cpp.intelliSenseEngine": "disabled"
+            }
+        }
+    },
 
     "remoteEnv": {
         "VCPKG_ROOT": "/opt/vcpkg"

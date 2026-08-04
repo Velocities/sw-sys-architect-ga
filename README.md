@@ -224,16 +224,75 @@ All compilers, libraries, and tooling are provided inside the dev container — 
 1. Clone the repository and open it in VS Code or Cursor.
 2. When prompted, click **Reopen in Container**.  
    If you are not prompted, open the Command Palette (`Ctrl+Shift+P` / `Cmd+Shift+P`) and run **Dev Containers: Reopen in Container**.
-3. Wait for the container image to build on first launch. This can take several minutes while vcpkg downloads and compiles dependencies.
-4. On first open, the container automatically runs configure, build, and tests via `postCreateCommand`.
+3. Wait for the container image to build on first launch. This takes a few minutes.
+4. Once attached, run the one-time setup from a terminal inside the container:
 
-After setup completes, you should have a working build in `build/dev/` and passing smoke tests.
+```bash
+./scripts/dev-setup.sh
+```
+
+This configures CMake, installs vcpkg dependencies, builds, and runs the tests. Afterwards you have a working build in `build/dev/` and passing smoke tests.
+
+To confirm the architecture model works end to end:
+
+```bash
+./scripts/run-demo.sh
+```
+
+Setup is intentionally *not* wired to `postCreateCommand`, so attaching to the container is fast and never blocked by a long build.
+
+### Opening the Container When Docker Runs on a Remote Machine
+
+If you run Cursor on a workstation but keep the repository and Docker on a separate Linux box, **Reopen in Container will not work**. Cursor cannot drive the Dev Containers extension through an SSH remote — every attempt fails with `WebSocket close with status code 1006`.
+
+The container therefore doubles as its own SSH target. On the Linux machine that runs Docker:
+
+```bash
+npm install -g @devcontainers/cli   # once
+./scripts/container-up.sh
+```
+
+That builds and starts the container, starts `sshd` inside it, and publishes it on `127.0.0.1:2222` of the Docker host. The container trusts every key already listed in that machine's `~/.ssh/authorized_keys`, so no new keys are needed.
+
+Then add this to `~/.ssh/config` on your workstation, replacing `my-linux-box` with the SSH host you already use to reach the Docker machine:
+
+```sshconfig
+Host evoarch-container
+    HostName 127.0.0.1
+    Port 2222
+    User vscode
+    ProxyJump my-linux-box
+    StrictHostKeyChecking no
+    UserKnownHostsFile /dev/null
+```
+
+On Windows use `UserKnownHostsFile NUL` instead of `/dev/null`.
+
+The port is published only on the Docker host's loopback interface, so `ProxyJump` tunnels in through the machine you already trust and nothing new is exposed to the network. `UserKnownHostsFile` is discarded because the container regenerates its host keys whenever the image is rebuilt.
+
+In Cursor: **Remote-SSH: Connect to Host** → `evoarch-container` → **Open Folder** → `/workspaces/sw-sys-architect-ga`.
+
+Re-run `./scripts/container-up.sh` after a reboot or whenever the container has been stopped; it restarts the container and `sshd` and is safe to run repeatedly.
 
 ### Rebuilding the Container
 
 Rebuild the container if you change `.devcontainer/Dockerfile` or need a clean environment:
 
 - Command Palette → **Dev Containers: Rebuild Container**
+- Or, when using the SSH workflow above: `devcontainer up --workspace-folder . --remove-existing-container`
+
+### Notes on the Container Image
+
+The image is built from `ubuntu:24.04` rather than `mcr.microsoft.com/devcontainers/cpp`. The Microsoft C++ image advertises `ms-vscode.cpptools` through its `devcontainer.metadata` label, and that extension does not exist in Cursor's marketplace. Cursor fails the extension install during startup and the remote extension host handshake is aborted, which surfaces as `WebSocket close with status code 1006`.
+
+Because of that, IntelliSense is provided by **clangd** (backed by `build/dev/compile_commands.json`) and the cpptools engine is explicitly disabled. Run `./scripts/dev-setup.sh` at least once so clangd has a compilation database to read.
+
+If the container fails to attach, you can always build and run without the IDE:
+
+```bash
+devcontainer up --workspace-folder .
+docker exec -it -u vscode -w /workspaces/sw-sys-architect-ga <container_id> bash
+```
 
 ---
 
@@ -245,6 +304,9 @@ All commands below assume you are inside the dev container and at the project ro
 
 | Task | Command |
 |------|---------|
+| Start the container + SSH (run on the Docker host) | `./scripts/container-up.sh` |
+| First-time setup (configure + build + test) | `./scripts/dev-setup.sh` |
+| Run the architecture demo | `./scripts/run-demo.sh` |
 | Configure (Debug) | `cmake --preset dev` |
 | Build (Debug) | `cmake --build --preset dev` |
 | Run tests | `ctest --preset dev` |
