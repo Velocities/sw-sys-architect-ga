@@ -45,6 +45,7 @@ add_library(evoarch STATIC
     src/services/PostgresService.cpp
     src/services/RedisService.cpp
     src/simulation/Event.cpp
+    src/simulation/Metrics.cpp
     src/simulation/Request.cpp
     src/simulation/Simulator.cpp
     src/simulation/Workflow.cpp
