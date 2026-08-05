@@ -9,6 +9,7 @@
 
 #include "architecture/Component.hpp"
 #include "architecture/ComponentType.hpp"
+#include "architecture/PerformanceModel.hpp"
 
 namespace evoarch
 {
@@ -40,6 +41,57 @@ namespace evoarch
             }
 
             return json[fieldName].get<double>();
+        }
+
+        PerformanceModel parsePerformanceModel(
+            const nlohmann::json& node,
+            ComponentType type)
+        {
+            PerformanceModel model = defaultPerformanceModelForType(type);
+
+            if (node.contains("processing"))
+            {
+                const auto& processing = node["processing"];
+
+                if (!processing.is_object())
+                {
+                    throw std::runtime_error("Node: invalid 'processing' object");
+                }
+
+                if (processing.contains("distribution"))
+                {
+                    model.processing.distribution = parseProcessingDistribution(
+                        requireStringField(processing, "distribution", "Processing"));
+                }
+
+                if (processing.contains("mean_ms"))
+                {
+                    model.processing.meanMs = requireNumberField(processing, "mean_ms", "Processing");
+                }
+
+                if (processing.contains("std_dev_ms"))
+                {
+                    model.processing.stdDevMs =
+                        requireNumberField(processing, "std_dev_ms", "Processing");
+                }
+            }
+
+            if (node.contains("max_concurrent_requests"))
+            {
+                if (!node["max_concurrent_requests"].is_number_unsigned())
+                {
+                    throw std::runtime_error("Node: invalid 'max_concurrent_requests' field");
+                }
+
+                model.maxConcurrentRequests = node["max_concurrent_requests"].get<std::size_t>();
+            }
+
+            if (node.contains("monthly_cost"))
+            {
+                model.monthlyCost = requireNumberField(node, "monthly_cost", "Node");
+            }
+
+            return model;
         }
     }
 
@@ -117,14 +169,17 @@ namespace evoarch
         {
             const std::string nodeId = requireStringField(node, "id", "Node");
             const std::string nodeType = requireStringField(node, "type", "Node");
+            const ComponentType componentType = parseComponentType(nodeType);
 
             if (verticesById.contains(nodeId))
             {
                 throw std::runtime_error("Duplicate node id: " + nodeId);
             }
 
-            const auto vertex = definition.architecture.addComponent(
-                std::make_shared<Component>(nodeId, parseComponentType(nodeType)));
+            const auto vertex = definition.architecture.addComponent(std::make_shared<Component>(
+                nodeId,
+                componentType,
+                parsePerformanceModel(node, componentType)));
 
             verticesById.emplace(nodeId, vertex);
         }

@@ -17,7 +17,12 @@
         },
         {
             "id": "db-primary",
-            "type": "Postgres"
+            "type": "Postgres",
+            "processing": {
+                "distribution": "log_normal",
+                "mean_ms": 20.0,
+                "std_dev_ms": 8.0
+            }
         }
     ],
     "edges": [

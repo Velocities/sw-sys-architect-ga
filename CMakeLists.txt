@@ -36,6 +36,7 @@ add_library(evoarch STATIC
     src/architecture/ArchitectureGraph.cpp
     src/architecture/ArchitectureLoader.cpp
     src/architecture/Component.cpp
+    src/architecture/PerformanceModel.cpp
     src/ga/Fitness.cpp
     src/ga/GeneticAlgorithm.cpp
     src/ga/Genome.cpp
@@ -44,6 +45,7 @@ add_library(evoarch STATIC
     src/services/LoadBalancer.cpp
     src/services/PostgresService.cpp
     src/services/RedisService.cpp
+    src/simulation/ComponentRuntimeState.cpp
     src/simulation/Event.cpp
     src/simulation/Metrics.cpp
     src/simulation/Request.cpp
