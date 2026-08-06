@@ -22,6 +22,7 @@ namespace evoarch
 {
     namespace
     {
+        // Accumulators filled during the run and converted into Metrics at the end.
         struct RuntimeMetrics
         {
             std::size_t completedRequests = 0;
@@ -107,6 +108,7 @@ namespace evoarch
             const PerformanceModel& model,
             std::mt19937& randomEngine)
         {
+            // Draw a single service-time sample from the component's configured distribution.
             switch (model.processing.distribution)
             {
             case ProcessingDistribution::Fixed:
@@ -148,6 +150,7 @@ namespace evoarch
             const Workload& workload,
             std::mt19937& randomEngine)
         {
+            // Weighted random choice matching each workflow's traffic percentage.
             std::uniform_real_distribution<double> distribution(0.0, 100.0);
             const double roll = distribution(randomEngine);
 
@@ -181,6 +184,7 @@ namespace evoarch
 
         bool advanceToNextComponentHop(Request& request)
         {
+            // Skip Client hops until the next real component type (or end of workflow).
             if (request.hopIndex() + 1 >= request.hops().size())
             {
                 return false;
@@ -230,6 +234,7 @@ namespace evoarch
 
         double computeMonthlyCost(const Architecture& architecture)
         {
+            // Static architecture cost rollup used by fitness functions later.
             double totalCost = 0.0;
 
             for (auto vertex :
@@ -269,6 +274,7 @@ namespace evoarch
             return metrics;
         }
 
+        // DES state: seeded RNG, time-ordered event queue, live requests, per-vertex runtime.
         std::mt19937 randomEngine(m_config.seed);
         EventQueue eventQueue;
         std::unordered_map<RequestId, Request> activeRequests;
@@ -287,6 +293,7 @@ namespace evoarch
 
         const auto scheduleFailureEvents = [&]()
         {
+            // Pre-schedule failure/recovery events onto the same queue as request traffic.
             for (const FailureEvent& failureEvent : m_config.failureScenario.events())
             {
                 SimulationEvent event;
@@ -339,6 +346,7 @@ namespace evoarch
                                               Architecture::Vertex currentVertex,
                                               ComponentType type) -> std::optional<Architecture::Vertex>
         {
+            // Prefer a direct outgoing edge; otherwise auto-route to any healthy node of that type.
             for (auto edge :
                  boost::make_iterator_range(boost::out_edges(currentVertex, m_architecture.graph())))
             {
@@ -381,6 +389,7 @@ namespace evoarch
 
         const auto tryStartQueuedRequest = [&](Architecture::Vertex vertex)
         {
+            // When capacity frees up, drain the waiting queue at this component.
             auto& state = runtimeStates[vertex];
             const auto& component = m_architecture.graph()[vertex].component;
 
@@ -423,6 +432,7 @@ namespace evoarch
 
             if (!state.isHealthy())
             {
+                // Failover: reroute to another healthy instance of the same component type.
                 const auto rerouted = routeToComponentType(vertex, component->type());
 
                 if (!rerouted.has_value())
@@ -441,6 +451,7 @@ namespace evoarch
 
             if (state.inFlight() >= component->model().maxConcurrentRequests)
             {
+                // At capacity — wait until a processing slot opens.
                 state.enqueue(request.id());
                 runtimeMetrics.peakQueueLength[vertex] = std::max(
                     runtimeMetrics.peakQueueLength[vertex],
@@ -454,6 +465,7 @@ namespace evoarch
                 sampleProcessingTimeMs(component->model(), randomEngine);
             runtimeMetrics.totalProcessingTimeMs[vertex] += processingTimeMs;
 
+            // Schedule when this request will finish at the current component.
             SimulationEvent completionEvent;
             completionEvent.timeMs = request.currentTime() + processingTimeMs;
             completionEvent.type = SimulationEventType::ProcessingComplete;
@@ -470,6 +482,7 @@ namespace evoarch
                 return;
             }
 
+            // Route to the next workflow hop and continue processing there.
             const auto nextType = hopComponentType(request.hops()[request.hopIndex()]);
 
             if (!nextType.has_value())
@@ -501,6 +514,7 @@ namespace evoarch
 
         const auto spawnRequest = [&](std::size_t workflowIndex, double arrivalTimeMs)
         {
+            // Create a new request at the workflow's first real component hop.
             const Workflow& workflow = m_workload.workflows()[workflowIndex].workflow;
             const std::vector<WorkflowHop>& hops = workflow.hops();
             const std::size_t hopIndex = firstComponentHopIndex(hops);
@@ -557,6 +571,7 @@ namespace evoarch
 
         if (arrivalIntervalMs > 0.0)
         {
+            // Fixed-interval arrivals for the whole run; each picks a workflow by weight.
             for (double arrivalTimeMs = 0.0; arrivalTimeMs < durationMs;
                  arrivalTimeMs += arrivalIntervalMs)
             {
@@ -572,6 +587,8 @@ namespace evoarch
 
         while (!eventQueue.empty())
         {
+            // std::priority_queue::pop() removes the top element but returns void —
+            // top() must be called first to read the next event before removing it.
             SimulationEvent event = eventQueue.top();
             eventQueue.pop();
 
@@ -591,6 +608,7 @@ namespace evoarch
 
             case SimulationEventType::ProcessingComplete:
             {
+                // Service finished — advance the workflow and free capacity for queued work.
                 const auto& payload = std::get<ProcessingCompletePayload>(event.payload);
                 const auto requestIt = activeRequests.find(payload.requestId);
 
@@ -615,6 +633,7 @@ namespace evoarch
 
             case SimulationEventType::FailureInjection:
             {
+                // Scenario-driven health changes (used for redundancy/resilience testing).
                 const auto& payload = std::get<FailureInjectionPayload>(event.payload);
                 const auto targetVertex = resolveTargetVertex(payload.failureEvent.targetComponentId);
 
@@ -638,6 +657,7 @@ namespace evoarch
             }
         }
 
+        // Convert runtime counters into the final Metrics snapshot.
         metrics.setCompletedRequests(runtimeMetrics.completedRequests);
         metrics.setFailedRequests(runtimeMetrics.failedRequests);
 
@@ -687,6 +707,7 @@ namespace evoarch
                 continue;
             }
 
+            // Per-component queue and utilization snapshots for the fitness function.
             const double peakQueue = runtimeMetrics.peakQueueLength.contains(vertex)
                 ? runtimeMetrics.peakQueueLength[vertex]
                 : static_cast<double>(runtimeStates[vertex].queued());
