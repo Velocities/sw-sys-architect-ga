@@ -1,0 +1,25 @@
+{
+    "name": "default-ga",
+    "description": "Default genetic algorithm search over cache-aside architectures",
+    "seed": 42,
+    "population_size": 8,
+    "generations": 4,
+    "mutation_rate": 0.25,
+    "crossover_rate": 0.7,
+    "tournament_size": 3,
+    "elitism_count": 1,
+    "genome": {
+        "api_instances": { "min": 1, "max": 4 },
+        "redis_instances": { "min": 1, "max": 2 },
+        "postgres_instances": { "min": 1, "max": 3 }
+    },
+    "fitness": {
+        "throughput_weight": 0.4,
+        "latency_weight": 0.3,
+        "cost_weight": 0.2,
+        "availability_weight": 0.1,
+        "reference_throughput": 20.0,
+        "reference_latency_ms": 50.0,
+        "reference_cost": 400.0
+    }
+}

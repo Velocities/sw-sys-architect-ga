@@ -106,6 +106,16 @@ target_link_libraries(
         evoarch::evoarch
 )
 
+add_executable(ga_run
+    apps/ga_run/main.cpp
+)
+
+target_link_libraries(
+    ga_run
+    PRIVATE
+        evoarch::evoarch
+)
+
 if(BUILD_TESTING)
     enable_testing()
     add_subdirectory(tests)

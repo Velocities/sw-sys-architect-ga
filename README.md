@@ -2,7 +2,7 @@
 
 **EvoArch** is a system architecture simulator and optimization framework.
 
-The goal of the project is to model distributed systems using graph-based representations, simulate realistic workloads, and evaluate architectures using configurable performance metrics. Future versions will use genetic algorithms to automatically evolve architectures that optimize for latency, throughput, cost, reliability, and other objectives.
+The goal of the project is to model distributed systems using graph-based representations, simulate realistic workloads, and evaluate architectures using configurable performance metrics. A genetic algorithm searches over architecture designs by running the simulator and scoring the resulting metrics.
 
 ---
 
@@ -68,19 +68,43 @@ The goal of the project is to model distributed systems using graph-based repres
 
 ## Project Structure
 
+EvoArch is organized by responsibility. Static architecture definitions live separately from runtime simulation state and from the optimization layer.
+
 ```
-include/
-    architecture/
-    simulation/
-    services/
-    ga/
-
-src/
-
-configs/
-
-tests/
+sw-sys-architect-ga/
+├── include/                  # Public headers
+│   ├── architecture/         # Graph model, components, JSON loading
+│   ├── services/             # Per-component-type defaults (cost, processing time)
+│   ├── simulation/           # Workloads, DES simulator, metrics, failures
+│   └── ga/                   # Genome, fitness, population, genetic algorithm
+├── src/                      # Implementations (mirrors include/)
+├── apps/                     # Standalone executables
+│   ├── architecture_demo/    # Hard-coded architecture smoke test
+│   ├── architecture_loader_test/
+│   ├── simulation_run/       # Run one simulation from JSON configs
+│   └── ga_run/               # Run the genetic algorithm
+├── configs/                  # JSON configs for architectures, workloads, simulator, GA
+├── scripts/                  # dev-setup, run-demo, run-simulation, run-ga, container-up
+└── tests/                    # GoogleTest unit tests
 ```
+
+### Where code belongs
+
+| Layer | Directory | Responsibility |
+|-------|-----------|----------------|
+| **Architecture** | `include/architecture/`, `include/services/` | What the system *is*: graph topology, component types, performance models, monthly cost defaults |
+| **Simulation** | `include/simulation/` | What *happens* during a run: requests, event queue, failures, metrics |
+| **Optimization** | `include/ga/` | How architectures are *searched*: genomes, fitness scoring, evolution |
+| **Apps** | `apps/` | Thin entry points that load JSON and invoke the library |
+| **Configs** | `configs/` | Declarative inputs — no recompile needed to change a scenario |
+
+Key files to start from:
+
+- `include/architecture/Architecture.hpp` — Boost graph of components and edges
+- `include/architecture/ArchitectureLoader.hpp` — load architectures from JSON
+- `include/simulation/Simulator.hpp` — discrete-event simulation engine
+- `include/simulation/Metrics.hpp` — simulation output (latency, throughput, cost, …)
+- `include/ga/GeneticAlgorithm.hpp` — evolution loop over architecture genomes
 
 ---
 
@@ -307,6 +331,9 @@ All commands below assume you are inside the dev container and at the project ro
 | Start the container + SSH (run on the Docker host) | `./scripts/container-up.sh` |
 | First-time setup (configure + build + test) | `./scripts/dev-setup.sh` |
 | Run the architecture demo | `./scripts/run-demo.sh` |
+| Load and print an architecture from JSON | `./build/dev/architecture_loader_test` |
+| Run a simulation | `./scripts/run-simulation.sh` |
+| Run the genetic algorithm | `./scripts/run-ga.sh` |
 | Configure (Debug) | `cmake --preset dev` |
 | Build (Debug) | `cmake --build --preset dev` |
 | Run tests | `ctest --preset dev` |
@@ -337,13 +364,27 @@ IDE integration is preconfigured in `.vscode/settings.json` to use the `dev` pre
 
 ### Configuration Files
 
-Example JSON configs live in `configs/`:
+JSON configs live in `configs/`:
 
-- `example_architecture.json` — graph-based architecture definitions
-- `example_workload.json` — request traffic patterns
-- `example_simulator.json` — simulator settings and metrics
+| File | Purpose |
+|------|---------|
+| `test_architecture.json` | Example cache-aside topology (LB → API → Redis → Postgres) |
+| `example_workload.json` | Workflow mix (Login, Read Feed, …) with traffic percentages |
+| `example_simulator.json` | Duration, arrival rate, seed, failure injection |
+| `healthy_simulator.json` | Same as above but with failures disabled |
+| `example_ga.json` | GA population, generations, genome bounds, fitness weights |
 
-These are placeholders for now and will be consumed by the simulator as implementation progresses.
+Example — run a healthy simulation:
+
+```bash
+./scripts/run-simulation.sh configs/test_architecture.json configs/example_workload.json configs/healthy_simulator.json
+```
+
+Example — run the GA with a failure scenario (tests resilience):
+
+```bash
+./scripts/run-ga.sh configs/example_ga.json configs/example_workload.json configs/example_simulator.json
+```
 
 ### Project Layout (Build Artifacts)
 
@@ -361,13 +402,149 @@ vcpkg_installed/      # vcpkg dependencies (created during configure)
 
 ---
 
+## How the Simulator Works
+
+The simulator is a **discrete-event simulation (DES)** engine. It models requests moving through an architecture graph under a configurable workload and optional failure scenario, then produces a `Metrics` snapshot.
+
+### Pipeline
+
+```
+Architecture + Workload + SimulatorConfig
+              ↓
+          Simulator::run()
+              ↓
+           Metrics
+```
+
+`Metrics` is intentionally separate from the genetic algorithm — the simulator *measures*; downstream code *evaluates* those measurements.
+
+### Main concepts
+
+| Concept | Class / file | Role |
+|---------|--------------|------|
+| **Architecture** | `Architecture` | Static graph: components (vertices) and network links (edges with latency/bandwidth) |
+| **Component** | `Component` | A node with a type (API, Redis, Postgres, LoadBalancer) and a `PerformanceModel` |
+| **PerformanceModel** | `PerformanceModel` | Theoretical service time distribution, concurrency limit, monthly cost |
+| **Workload** | `Workload` | Named collection of workflows, each with a traffic percentage |
+| **Workflow** | `Workflow` | Ordered hops through component *types* (and `Client` endpoints) — not specific instance IDs |
+| **Request** | `Request` | One in-flight unit of work tracking position, time, and accumulated latency |
+| **ComponentRuntimeState** | `ComponentRuntimeState` | Per-vertex runtime: queue, in-flight count, healthy flag |
+| **FailureScenario** | `FailureScenario` | Timed `node_down` / `node_recovery` events targeting component IDs |
+| **Metrics** | `Metrics` | Output: latency percentiles, throughput, availability, cost, utilization |
+
+### Event loop
+
+All simulation activity is driven by a time-ordered priority queue (`EventQueue` in `include/simulation/Event.hpp`):
+
+1. **RequestArrival** — spawn a request, pick a workflow by weight, enter the graph at the first component hop
+2. **ProcessingComplete** — a component finishes service; advance the workflow to the next hop or complete the request
+3. **FailureInjection** — flip a component's health; queued work resumes on recovery
+
+At each component the simulator:
+
+- Samples processing time from the component's distribution (fixed, normal, or log-normal)
+- Enforces `maxConcurrentRequests` — excess requests wait in a queue
+- Auto-routes to another healthy instance of the same type when the target is down
+- Adds network latency from edge properties (or a default when no direct edge exists)
+
+### Failure scenarios
+
+Failures are **scenario-driven**, not random per-request noise. Configure them in the simulator JSON:
+
+```json
+"failure_injection": {
+    "enabled": true,
+    "preset": "kill_primary_db",
+    "events": [
+        { "type": "node_down", "target": "db-primary", "at_time_ms": 10000, "duration_ms": 5000 }
+    ]
+}
+```
+
+When `duration_ms` is set on a `node_down` event, a matching `node_recovery` is scheduled automatically.
+
+---
+
+## How the Genetic Algorithm Works
+
+The GA searches over **architecture genomes** — compact encodings of how many API, Redis, and Postgres instances to provision — by repeatedly simulating each candidate and scoring the resulting metrics.
+
+### Pipeline
+
+```
+Genome → Architecture → Simulator → Metrics → FitnessFunction → fitness score
+         ↑__________________________________________|
+                    selection / crossover / mutation
+```
+
+### Genome
+
+A `Genome` (`include/ga/Genome.hpp`) holds three genes:
+
+- `apiInstances`
+- `redisInstances`
+- `postgresInstances`
+
+`Genome::toArchitecture()` expands a genome into a full cache-aside topology:
+
+- One load balancer connects to every API instance
+- Every API connects to every Redis instance
+- Every Redis connects to every Postgres instance (primary + replicas)
+
+Bounds for each gene are set in `configs/example_ga.json` under `"genome"`.
+
+### Fitness function
+
+`FitnessFunction` (`include/ga/Fitness.hpp`) converts `Metrics` into a single score using weighted, normalized terms:
+
+```
+fitness = w_throughput × (throughput / ref_throughput)
+        + w_latency    × (ref_latency / average_latency)
+        + w_cost       × (ref_cost / monthly_cost)
+        + w_availability × availability
+```
+
+Weights and reference values are configured in the GA JSON under `"fitness"`. Higher fitness is better. Latency and cost terms reward *lower* values by inverting them against a reference.
+
+The simulator and fitness function stay decoupled — you can change scoring without touching simulation logic, or run simulations without the GA.
+
+### Evolution loop
+
+`GeneticAlgorithm::run()` (`include/ga/GeneticAlgorithm.hpp`):
+
+1. Create a random initial `Population`
+2. For each generation:
+   - **Evaluate** every individual (run the simulator, compute fitness)
+   - **Select** parents via tournament selection
+   - **Crossover** genomes (uniform gene swap)
+   - **Mutate** instance counts (±1 per gene, with configurable probability)
+   - **Elitism** — carry the best individual forward unchanged
+3. Return the highest-fitness individual after all generations
+
+Each individual is simulated with a distinct seed derived from the GA seed so runs are reproducible but not identical.
+
+### GA configuration
+
+`configs/example_ga.json` controls population size, generation count, mutation/crossover rates, genome bounds, and fitness weights. The workload and simulator configs are the same files used by `./scripts/run-simulation.sh` — the GA evaluates candidates against the same traffic and failure scenario you choose.
+
+---
+
 ## Current Status
 
-🚧 Early development
+Implemented:
 
-The initial milestone is to build the simulation engine capable of executing request workflows over graph-based architectures.
+- Graph-based architecture model with JSON loading
+- Component performance models and type-specific cost defaults
+- Workloads, workflows, discrete-event simulation, failure injection
+- Metrics collection (latency, throughput, availability, cost, utilization)
+- Genetic algorithm with configurable fitness function
 
-Once the simulator is complete, genetic algorithm support will be added to automatically explore and optimize architecture designs.
+Planned next:
+
+- Cache hit/miss modeling in simulation
+- Multi-objective optimization / Pareto frontiers (NSGA-II)
+- Richer genome (edge tuning, additional component types)
+- Workload and failure-scenario JSON presets
 
 ---
 
