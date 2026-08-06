@@ -22,6 +22,8 @@ namespace evoarch
 {
     namespace
     {
+        // --- Runtime accumulators ---
+
         // Accumulators filled during the run and converted into Metrics at the end.
         struct RuntimeMetrics
         {
@@ -36,13 +38,17 @@ namespace evoarch
             std::unordered_map<Architecture::Vertex, double> peakQueueLength;
         };
 
+        // --- Workflow hop helpers ---
+
         bool isClientHop(const WorkflowHop& hop)
         {
+            // Client hops are workflow endpoints, not graph vertices.
             return std::holds_alternative<WorkflowEndpoint>(hop);
         }
 
         std::optional<ComponentType> hopComponentType(const WorkflowHop& hop)
         {
+            // Extract the component type from a hop, if this hop visits a service.
             if (const auto* componentType = std::get_if<ComponentType>(&hop))
             {
                 return *componentType;
@@ -51,10 +57,13 @@ namespace evoarch
             return std::nullopt;
         }
 
+        // --- Graph lookup helpers ---
+
         std::optional<Architecture::Vertex> findVertexByComponentId(
             const Architecture& architecture,
             const std::string& componentId)
         {
+            // Map a JSON/component id (e.g. "db-primary") to its graph vertex.
             for (auto vertex :
                  boost::make_iterator_range(boost::vertices(architecture.graph())))
             {
@@ -73,6 +82,7 @@ namespace evoarch
             const Architecture& architecture,
             ComponentType type)
         {
+            // All instances of a component type — used for routing and failover.
             std::vector<Architecture::Vertex> vertices;
 
             for (auto vertex :
@@ -94,6 +104,7 @@ namespace evoarch
             Architecture::Vertex from,
             Architecture::Vertex to)
         {
+            // Network delay for a direct connection; nullopt if no edge exists.
             const auto [edge, exists] = boost::edge(from, to, architecture.graph());
 
             if (!exists)
@@ -103,6 +114,8 @@ namespace evoarch
 
             return architecture.graph()[edge].latencyMs;
         }
+
+        // --- Sampling and metrics helpers ---
 
         double sampleProcessingTimeMs(
             const PerformanceModel& model,
@@ -125,6 +138,7 @@ namespace evoarch
 
             case ProcessingDistribution::LogNormal:
             {
+                // Convert mean/stddev into log-normal parameters for long-tail service times.
                 const double variance =
                     model.processing.stdDevMs * model.processing.stdDevMs;
                 const double mean = model.processing.meanMs;
@@ -171,6 +185,7 @@ namespace evoarch
 
         std::size_t firstComponentHopIndex(const std::vector<WorkflowHop>& hops)
         {
+            // Skip leading Client hops to find where the request enters the architecture.
             for (std::size_t index = 0; index < hops.size(); ++index)
             {
                 if (hopComponentType(hops[index]).has_value())
@@ -214,6 +229,7 @@ namespace evoarch
             const std::vector<double>& values,
             double percentile)
         {
+            // Linear interpolation over sorted latency samples (P95, P99, etc.).
             if (values.empty())
             {
                 return 0.0;
@@ -271,6 +287,7 @@ namespace evoarch
 
         if (m_workload.workflowCount() == 0)
         {
+            // Nothing to simulate — return cost-only metrics.
             return metrics;
         }
 
@@ -284,9 +301,11 @@ namespace evoarch
         for (auto vertex :
              boost::make_iterator_range(boost::vertices(m_architecture.graph())))
         {
+            // Every graph node gets its own queues, health flag, and in-flight count.
             runtimeStates.emplace(vertex, ComponentRuntimeState{});
         }
 
+        // Simulation window and fixed-interval request arrivals.
         const double durationMs = m_config.durationSeconds * 1000.0;
         const double arrivalIntervalMs =
             m_config.requestsPerSecond > 0.0 ? (1000.0 / m_config.requestsPerSecond) : 0.0;
@@ -305,6 +324,7 @@ namespace evoarch
                 if (failureEvent.durationMs.has_value()
                     && failureEvent.type == FailureEventType::NodeDown)
                 {
+                    // Temporary failures schedule an automatic recovery event.
                     FailureEvent recoveryEvent;
                     recoveryEvent.type = FailureEventType::NodeRecovery;
                     recoveryEvent.targetComponentId = failureEvent.targetComponentId;
@@ -323,6 +343,7 @@ namespace evoarch
         const auto resolveTargetVertex =
             [&](const std::string& targetId) -> std::optional<Architecture::Vertex>
         {
+            // Resolve failure targets by id, with a preset fallback for "db-primary".
             if (auto vertex = findVertexByComponentId(m_architecture, targetId))
             {
                 return vertex;
@@ -373,6 +394,7 @@ namespace evoarch
 
         const auto failRequest = [&](Request& request)
         {
+            // No viable route or component — count as failed and drop from active set.
             request.setFailed(true);
             ++runtimeMetrics.failedRequests;
             activeRequests.erase(request.id());
@@ -380,6 +402,7 @@ namespace evoarch
 
         const auto completeRequest = [&](const Request& request)
         {
+            // Request returned to Client — record latency and remove from active set.
             ++runtimeMetrics.completedRequests;
             runtimeMetrics.completedLatencies.push_back(request.totalLatency());
             activeRequests.erase(request.id());
@@ -420,6 +443,7 @@ namespace evoarch
 
         beginProcessing = [&](Request& request)
         {
+            // Attempt to service a request at its current vertex (queue, process, or reroute).
             const Architecture::Vertex vertex = request.currentVertex();
             auto& state = runtimeStates[vertex];
             const auto& component = m_architecture.graph()[vertex].component;
@@ -476,6 +500,7 @@ namespace evoarch
 
         const auto moveRequestToNextHop = [&](Request& request)
         {
+            // Finished at current hop — either complete the workflow or visit the next component.
             if (!advanceToNextComponentHop(request))
             {
                 completeRequest(request);
@@ -506,6 +531,7 @@ namespace evoarch
                                               nextVertex.value())
                                               .value_or(1.0);
 
+            // Charge network time, advance the clock, and begin service at the next hop.
             request.addLatency(networkLatency);
             request.setCurrentTime(request.currentTime() + networkLatency);
             request.setCurrentVertex(nextVertex.value());
@@ -540,6 +566,7 @@ namespace evoarch
 
             Architecture::Vertex entryVertex = entryVertices.front();
 
+            // Prefer a healthy entry point when multiple instances exist.
             for (Architecture::Vertex candidate : entryVertices)
             {
                 if (runtimeStates[candidate].isHealthy())
@@ -594,6 +621,7 @@ namespace evoarch
 
             if (event.timeMs > durationMs)
             {
+                // Ignore events scheduled beyond the simulation window.
                 continue;
             }
 
@@ -601,6 +629,7 @@ namespace evoarch
             {
             case SimulationEventType::RequestArrival:
             {
+                // Inject a new request chosen by the pre-assigned workflow index.
                 const auto& payload = std::get<RequestArrivalPayload>(event.payload);
                 spawnRequest(payload.workflowIndex, event.timeMs);
                 break;
@@ -663,6 +692,7 @@ namespace evoarch
 
         if (!runtimeMetrics.completedLatencies.empty())
         {
+            // Latency percentiles from successfully completed requests only.
             std::vector<double> sortedLatencies = runtimeMetrics.completedLatencies;
             std::sort(sortedLatencies.begin(), sortedLatencies.end());
 
@@ -680,6 +710,7 @@ namespace evoarch
 
         if (m_config.durationSeconds > 0.0)
         {
+            // Completed requests per second over the full simulation duration.
             metrics.setThroughput(static_cast<double>(runtimeMetrics.completedRequests)
                                   / m_config.durationSeconds);
         }
@@ -689,6 +720,7 @@ namespace evoarch
 
         if (totalRequests > 0)
         {
+            // Share of injected requests that finished the full workflow.
             metrics.setAvailability(static_cast<double>(runtimeMetrics.completedRequests)
                                     / static_cast<double>(totalRequests));
         }
