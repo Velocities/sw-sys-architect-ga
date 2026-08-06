@@ -49,6 +49,7 @@ namespace evoarch
         std::size_t generationsCompleted = 0;
     };
 
+    // Drives the evolution loop: evaluate → select → crossover → mutate → repeat.
     class GeneticAlgorithm
     {
     public:

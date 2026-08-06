@@ -31,6 +31,7 @@ namespace evoarch
         Metrics metrics;
     };
 
+    // Converts simulation Metrics into a single weighted fitness score for the GA.
     class FitnessFunction
     {
     public:

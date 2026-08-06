@@ -22,7 +22,7 @@ namespace evoarch
         std::size_t maxPostgresInstances = 3;
     };
 
-    // Encodes a cache-aside architecture as instance counts for each component type.
+    // Compact architecture encoding — instance counts expanded by toArchitecture().
     class Genome
     {
     public:

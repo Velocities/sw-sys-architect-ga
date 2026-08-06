@@ -11,6 +11,8 @@ namespace evoarch
 {
     namespace
     {
+        // --- JSON parsing helpers ---
+
         std::string requireStringField(
             const nlohmann::json& json,
             const char* fieldName,
@@ -109,11 +111,14 @@ namespace evoarch
             return normalization;
         }
 
+        // --- Selection ---
+
         const Individual& selectTournamentParent(
             const Population& population,
             std::mt19937& randomEngine,
             std::size_t tournamentSize)
         {
+            // Pick tournamentSize random individuals; return the fittest among them.
             std::uniform_int_distribution<std::size_t> distribution(0, population.size() - 1);
 
             const Individual* best = &population.individual(distribution(randomEngine));
@@ -167,6 +172,7 @@ namespace evoarch
 
         for (std::size_t generation = 0; generation < m_config.generations; ++generation)
         {
+            // Simulate every individual and assign fitness for this generation.
             population.evaluateAll(
                 m_workload,
                 m_simulatorConfig,
@@ -180,11 +186,13 @@ namespace evoarch
                 break;
             }
 
+            // Build the next generation from selection, crossover, and mutation.
             Population nextGeneration(m_config.populationSize);
             std::size_t nextIndex = 0;
 
             const Individual& currentBest = population.best();
 
+            // Elitism — preserve the best individual unchanged.
             for (std::size_t eliteIndex = 0;
                  eliteIndex < m_config.elitismCount && nextIndex < nextGeneration.size();
                  ++eliteIndex, ++nextIndex)
@@ -220,6 +228,7 @@ namespace evoarch
             population = std::move(nextGeneration);
         }
 
+        // Final evaluation so returned metrics match the best genome.
         population.evaluateAll(
             m_workload,
             m_simulatorConfig,

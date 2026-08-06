@@ -20,6 +20,7 @@ namespace evoarch
             return distribution(randomEngine);
         }
 
+        // Convenience wrapper — applies type defaults for cost and processing time.
         Architecture::Vertex addTypedComponent(
             Architecture& architecture,
             const std::string& id,
@@ -31,6 +32,7 @@ namespace evoarch
 
     Architecture Genome::toArchitecture() const
     {
+        // Expand the compact genome into a full cache-aside graph topology.
         Architecture architecture;
 
         const Architecture::Vertex loadBalancer =
@@ -63,15 +65,18 @@ namespace evoarch
 
         for (std::size_t index = 0; index < postgresInstances; ++index)
         {
+            // First postgres is always db-primary for failure-scenario compatibility.
             const std::string id = (index == 0) ? "db-primary" : "db-replica-" + std::to_string(index);
             postgresVertices.push_back(addTypedComponent(architecture, id, ComponentType::Postgres));
         }
 
+        // LB fans out to every API instance.
         for (Architecture::Vertex apiVertex : apiVertices)
         {
             architecture.connect(loadBalancer, apiVertex, 1.0, 1000.0);
         }
 
+        // Full mesh between APIs and Redis nodes (cache layer).
         for (Architecture::Vertex apiVertex : apiVertices)
         {
             for (Architecture::Vertex redisVertex : redisVertices)
@@ -80,6 +85,7 @@ namespace evoarch
             }
         }
 
+        // Every Redis connects to every Postgres for failover routing.
         for (Architecture::Vertex redisVertex : redisVertices)
         {
             for (Architecture::Vertex postgresVertex : postgresVertices)
@@ -93,6 +99,7 @@ namespace evoarch
 
     void Genome::clamp(const GenomeConstraints& constraints)
     {
+        // Keep gene values within the search bounds after crossover or mutation.
         apiInstances = std::clamp(
             apiInstances,
             constraints.minApiInstances,
@@ -111,6 +118,7 @@ namespace evoarch
         std::mt19937& randomEngine,
         const GenomeConstraints& constraints)
     {
+        // Uniform random genome for initial population seeding.
         Genome genome;
         genome.apiInstances =
             randomInRange(randomEngine, constraints.minApiInstances, constraints.maxApiInstances);
@@ -128,6 +136,7 @@ namespace evoarch
         const Genome& parentB,
         std::mt19937& randomEngine)
     {
+        // Uniform crossover — each gene independently inherited from one parent.
         std::uniform_int_distribution<int> coinFlip(0, 1);
 
         Genome child;
@@ -143,6 +152,7 @@ namespace evoarch
         const GenomeConstraints& constraints,
         double mutationRate)
     {
+        // Each gene independently has a chance to shift by ±1 instance count.
         std::uniform_real_distribution<double> probability(0.0, 1.0);
         std::uniform_int_distribution<int> deltaDistribution(-1, 1);
 

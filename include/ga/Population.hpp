@@ -10,6 +10,7 @@
 
 namespace evoarch
 {
+    // One candidate architecture plus its most recent simulation results.
     struct Individual
     {
         Genome genome;
@@ -19,6 +20,7 @@ namespace evoarch
         Metrics metrics;
     };
 
+    // Collection of individuals evaluated together as one GA generation.
     class Population
     {
     public:

@@ -52,6 +52,7 @@ namespace evoarch
         std::mt19937& randomEngine,
         const GenomeConstraints& constraints)
     {
+        // Seed generation 0 with random genomes — fitness is assigned during evaluateAll().
         for (Individual& member : m_individuals)
         {
             member.genome = Genome::random(randomEngine, constraints);
@@ -66,11 +67,13 @@ namespace evoarch
         const FitnessFunction& fitnessFunction,
         std::uint32_t evaluationSeed)
     {
+        // Each individual gets its own simulation run and fitness score.
         for (std::size_t index = 0; index < m_individuals.size(); ++index)
         {
             Individual& member = m_individuals[index];
 
             SimulatorConfig runConfig = simulatorConfig;
+            // Offset seed per individual so runs are reproducible but not identical.
             runConfig.seed = evaluationSeed + static_cast<std::uint32_t>(index);
 
             Simulator simulator(member.genome.toArchitecture(), workload, runConfig);
