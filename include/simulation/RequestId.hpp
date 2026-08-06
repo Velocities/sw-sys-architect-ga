@@ -23,3 +23,15 @@ namespace evoarch
         std::string m_value;
     };
 }
+
+namespace std
+{
+    template<>
+    struct hash<evoarch::RequestId>
+    {
+        std::size_t operator()(const evoarch::RequestId& requestId) const
+        {
+            return hash<std::string>{}(requestId.value());
+        }
+    };
+}

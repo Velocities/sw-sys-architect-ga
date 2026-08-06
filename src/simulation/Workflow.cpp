@@ -1,6 +1,7 @@
 #include "simulation/Workflow.hpp"
 
 #include <iostream>
+#include <stdexcept>
 
 namespace evoarch
 {
@@ -18,6 +19,16 @@ namespace evoarch
         }
 
         return std::string(componentTypeName(std::get<ComponentType>(hop)));
+    }
+
+    WorkflowHop parseWorkflowHop(const std::string& hopName)
+    {
+        if (hopName == "Client" || hopName == "client")
+        {
+            return WorkflowEndpoint::Client;
+        }
+
+        return parseComponentType(hopName);
     }
 
     Workflow::Workflow(std::string name)

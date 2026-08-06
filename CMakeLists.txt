@@ -47,12 +47,15 @@ add_library(evoarch STATIC
     src/services/RedisService.cpp
     src/simulation/ComponentRuntimeState.cpp
     src/simulation/Event.cpp
+    src/simulation/FailureScenario.cpp
     src/simulation/Metrics.cpp
     src/simulation/Request.cpp
     src/simulation/RequestId.cpp
     src/simulation/Simulator.cpp
+    src/simulation/SimulatorConfig.cpp
     src/simulation/Workflow.cpp
     src/simulation/Workload.cpp
+    src/simulation/WorkloadLoader.cpp
 )
 
 add_library(evoarch::evoarch ALIAS evoarch)
@@ -89,6 +92,16 @@ add_executable(architecture_loader_test
 
 target_link_libraries(
     architecture_loader_test
+    PRIVATE
+        evoarch::evoarch
+)
+
+add_executable(simulation_run
+    apps/simulation_run/main.cpp
+)
+
+target_link_libraries(
+    simulation_run
     PRIVATE
         evoarch::evoarch
 )

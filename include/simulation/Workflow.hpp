@@ -18,6 +18,8 @@ namespace evoarch
 
     std::string workflowHopLabel(const WorkflowHop& hop);
 
+    WorkflowHop parseWorkflowHop(const std::string& hopName);
+
     class Workflow
     {
     public:

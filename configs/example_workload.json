@@ -1,7 +1,58 @@
 {
     "name": "example-traffic",
-    "description": "Example workload definition",
-    "requests_per_second": 100,
-    "duration_seconds": 60,
-    "request_patterns": []
+    "description": "Example workload with cache-aside read traffic",
+    "workflows": [
+        {
+            "name": "Read Feed",
+            "percentage": 70,
+            "hops": [
+                "Client",
+                "LoadBalancer",
+                "Api",
+                "Redis",
+                "Postgres",
+                "Redis",
+                "Api",
+                "Client"
+            ]
+        },
+        {
+            "name": "Login",
+            "percentage": 10,
+            "hops": [
+                "Client",
+                "LoadBalancer",
+                "Api",
+                "Redis",
+                "Postgres",
+                "Redis",
+                "Api",
+                "Client"
+            ]
+        },
+        {
+            "name": "Comment",
+            "percentage": 10,
+            "hops": [
+                "Client",
+                "LoadBalancer",
+                "Api",
+                "Postgres",
+                "Api",
+                "Client"
+            ]
+        },
+        {
+            "name": "Upload Image",
+            "percentage": 10,
+            "hops": [
+                "Client",
+                "LoadBalancer",
+                "Api",
+                "Postgres",
+                "Api",
+                "Client"
+            ]
+        }
+    ]
 }

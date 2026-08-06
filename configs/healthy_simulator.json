@@ -1,0 +1,15 @@
+{
+    "name": "healthy-run",
+    "description": "Simulator configuration with no injected failures",
+    "seed": 42,
+    "duration_seconds": 30,
+    "requests_per_second": 20,
+    "failure_injection": {
+        "enabled": false
+    },
+    "metrics": {
+        "collect_latency_percentiles": true,
+        "collect_throughput": true,
+        "collect_cost": true
+    }
+}
